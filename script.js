@@ -1,9 +1,94 @@
+const PREFERENCES_STORAGE_KEY = 'routinePreferences';
+
+// Save current form values so they can be restored on the next visit
+function savePreferences() {
+  const timeOfDay = document.getElementById('timeOfDay').value;
+  const focusArea = document.getElementById('focusArea').value;
+  const timeAvailable = document.getElementById('timeAvailable').value;
+  const energyLevel = document.getElementById('energyLevel').value;
+  const activityCheckboxes = document.querySelectorAll('input[name="activities"]:checked');
+  const preferredActivities = Array.from(activityCheckboxes).map((checkbox) => checkbox.value);
+
+  const preferences = {
+    timeOfDay,
+    focusArea,
+    timeAvailable,
+    energyLevel,
+    preferredActivities
+  };
+
+  localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+}
+
+// Load saved values from localStorage and apply them to the form
+function loadPreferences() {
+  const savedPreferences = localStorage.getItem(PREFERENCES_STORAGE_KEY);
+
+  if (!savedPreferences) {
+    return;
+  }
+
+  const preferences = JSON.parse(savedPreferences);
+
+  if (preferences.timeOfDay) {
+    document.getElementById('timeOfDay').value = preferences.timeOfDay;
+  }
+  if (preferences.focusArea) {
+    document.getElementById('focusArea').value = preferences.focusArea;
+  }
+  if (preferences.timeAvailable) {
+    document.getElementById('timeAvailable').value = preferences.timeAvailable;
+  }
+  if (preferences.energyLevel) {
+    document.getElementById('energyLevel').value = preferences.energyLevel;
+  }
+
+  const activityCheckboxes = document.querySelectorAll('input[name="activities"]');
+  activityCheckboxes.forEach((checkbox) => {
+    checkbox.checked = preferences.preferredActivities?.includes(checkbox.value) || false;
+  });
+}
+
+// Restore preferences as soon as the page is loaded
+loadPreferences();
+
+// Save preferences whenever the user changes any field
+const preferenceInputs = document.querySelectorAll('#routineForm select, #routineForm input[name="activities"]');
+preferenceInputs.forEach((input) => {
+  input.addEventListener('change', savePreferences);
+});
+
 // Add an event listener to the form that runs when the form is submitted
 document.getElementById('routineForm').addEventListener('submit', async (e) => {
   // Prevent the form from refreshing the page
   e.preventDefault();
   
-  // TODO: Get values from all inputs and store them in variables
+  // Get values from all form inputs
+  const timeOfDay = document.getElementById('timeOfDay').value;
+  const focusArea = document.getElementById('focusArea').value;
+  const timeAvailable = document.getElementById('timeAvailable').value;
+  const energyLevel = document.getElementById('energyLevel').value;
+  const activityCheckboxes = document.querySelectorAll('input[name="activities"]:checked');
+  const preferredActivities = Array.from(activityCheckboxes).map((checkbox) => checkbox.value);
+
+  // Save submitted preferences too (useful if user clicks Generate without changing fields)
+  savePreferences();
+
+  // Build a clear prompt so the AI creates a personalized routine
+  const userPrompt = `Create a personalized daily routine using these preferences:
+Time of day: ${timeOfDay}
+Focus area: ${focusArea}
+Time available: ${timeAvailable} minutes
+Energy level: ${energyLevel}
+Preferred activities: ${preferredActivities.length > 0 ? preferredActivities.join(', ') : 'No specific preferences'}
+
+Requirements:
+- Give a structured, step-by-step routine.
+- Keep the total routine realistic for ${timeAvailable} minutes.
+- Match the routine to the selected ${timeOfDay} time and ${energyLevel} energy level.
+- Center the routine around ${focusArea}.
+- Include preferred activities when possible.
+- Use simple, encouraging language.`;
   
   // Find the submit button and update its appearance to show loading state
   const button = document.querySelector('button[type="submit"]');
@@ -22,7 +107,7 @@ document.getElementById('routineForm').addEventListener('submit', async (e) => {
         model: 'gpt-4o',
         messages: [      
           { role: 'system', content: `You are a helpful assistant that creates quick, focused daily routines. Always keep routines short, realistic, and tailored to the user's preferences.` },
-          { role: 'user', content: '' }
+          { role: 'user', content: userPrompt }
         ],
         temperature: 0.7,
         max_completion_tokens: 500
